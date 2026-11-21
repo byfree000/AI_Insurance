@@ -6,6 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # 以当前文件为基准，找向上2级的父目录，也就是项目的根目录
 APP_ROOT = Path(__file__).resolve().parents[2]
 
+
 class EnvSettings(BaseSettings):
     """公共settings，配置.env文件位置"""
     model_config = SettingsConfigDict(
@@ -14,6 +15,17 @@ class EnvSettings(BaseSettings):
         extra="ignore",  # settings中未定义的字段被忽略
     )
 
+class RAGSettings(EnvSettings):
+    """RAG相关配置"""
+    mineru_token: str = Field(alias="MINERU_TOKEN")
+    milvus_host: str = Field(alias="MILVUS_HOST", default="192.168.0.198")
+    milvus_port: int = Field(alias="MILVUS_PORT", default=19530)
+
+    @computed_field
+    @property
+    def milvus_url(self) -> str:
+        return f"http://{self.milvus_host}:{self.milvus_port}"
+    
 class AppSettings(EnvSettings):
     """应用相关设置"""
     name: str = Field(alias="APP_NAME")
@@ -67,6 +79,7 @@ class Settings(BaseSettings):
     app: AppSettings = Field(default_factory=AppSettings)
     db: DatabaseSettings = Field(default_factory=DatabaseSettings)
     llm: LLMSettings = Field(default_factory=LLMSettings)
+    rag: RAGSettings = Field(default_factory=RAGSettings)
     logging: LoggingSettings = Field(default_factory=LoggingSettings)
 
 # 项目启动直接初始化
