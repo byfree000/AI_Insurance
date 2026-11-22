@@ -26,7 +26,7 @@ async def lifespan(app: FastAPI):
     logger.info(f"【{settings.app.name}】应用启动中...")
 
     from app.infra.database import check_database, close_database
-
+    from app.rag import close_rag # 导入模块就会初始化
     try:
         # 1.检查业务数据库连接
         await check_database()
@@ -38,10 +38,14 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         logger.info("应用关闭中... ")
+        # 关闭RAG组件
+        close_rag()
         # 3.关闭Checkpointer连接池
         await close_checkpointer()
         # 4.关闭SQLAlchemy连接池
         await close_database()
+         # 4.关闭RAG资源
+        
 
 app = FastAPI(
     title=settings.app.name,

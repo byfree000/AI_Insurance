@@ -1,10 +1,11 @@
 from asyncio import Lock
 from collections.abc import AsyncIterator
-
+from aiostream import stream as astream
 from langgraph.graph.state import CompiledStateGraph
 from fastapi.sse import ServerSentEvent
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
+from langgraph.stream import CustomTransformer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.schemas import InsuranceAgentContext
@@ -101,15 +102,29 @@ class ChatService:
             await self._repair_unanswered_tool_calls(config)
 
             # 2.2.使用v3协议获取异步事件流
-            async with await self.agent.astream_events( # type: ignore
+            stream = await self.agent.astream_events(
                 _input,
-                config,
+                config=config,
                 context=context,
                 version="v3",
-            ) as stream:
-                # 2.3.只读取消息中的文本增量
+                transformers=(CustomTransformer,),
+            )
+            # 2.3.只读取消息中的文本增量
+            async def stream_messages():
                 async for message in stream.messages:
                     async for text in message.text:
                         yield ServerSentEvent(data=text, event="message")
+
+            # 2.4.判断是否有custom事件
+            async def stream_custom():
+                async for event in stream.extensions['custom']:
+                    if event.get('type') == 'additional_info':
+                        yield ServerSentEvent(data=event.get('data'), event="additional_info")
+
+            # 2.5.合并Message处理和custom事件处理
+            merged = astream.merge(stream_messages(), stream_custom())
+            async with merged.stream() as streamer:
+                async for event in streamer:
+                    yield event
         # 2.4.返回结束标识
         yield ServerSentEvent(data="[DONE]", event="done")

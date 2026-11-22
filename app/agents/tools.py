@@ -1,4 +1,5 @@
 from decimal import Decimal
+import json
 
 from langchain.tools import ToolRuntime, tool
 
@@ -58,3 +59,43 @@ async def save_insurance_plan(
         "plan_id": str(plan_id),
         "message": "保险方案保存成功",
     }
+
+
+from langgraph.config import get_stream_writer
+
+@tool
+async def query_product_clause(
+    query: str,
+    k: int,
+    product_id: int,
+) -> str:
+    """查询指定保险产品的条款内容。
+
+    Args:
+        query: 需要从保险条款中查询的问题。
+        product_id: 保险产品ID。
+    """
+    from app.rag import retriever
+
+    chunks = await retriever.retrieve(query, k, product_id)
+    if not chunks:
+        return "没有查询到相关保险条款。"
+
+    # 把model转换字典数据
+    sources = {
+        # 给文档编号，最终格式 {"ref-001": {"content": ""}}
+        f"ref-{i:03d}": {
+            "product_id": chunk.product_id,
+            "clause_name": chunk.clause_name,
+            "section_path": chunk.section_path,
+            "content": chunk.content,
+        }
+        for i, chunk in enumerate(chunks, start=1)
+    }
+
+    # 把sources写到自定义事件中
+    writer = get_stream_writer()
+    writer({"type": "additional_info", "data": sources})
+
+    # 以JSON格式返回
+    return json.dumps(sources, ensure_ascii=False)
