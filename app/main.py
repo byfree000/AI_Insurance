@@ -8,6 +8,7 @@ from app.modules.chat.router import router as chat_router
 from app.core.logging import configure_logging, get_logger
 import uvicorn
 import sys
+from app.agents.orchestrator import init_insurance_orchestrator
 from app.infra.checkpointer import (
     close_checkpointer,
     init_checkpointer,
@@ -33,7 +34,7 @@ async def lifespan(app: FastAPI):
         # 2.初始化Checkpointer
         checkpointer = await init_checkpointer()
           # 3.初始化保险顾问Agent
-        app.state.agent = init_insurance_agent(checkpointer)
+        app.state.agent = init_insurance_orchestrator(checkpointer)
 
         yield
     finally:
